@@ -25,9 +25,11 @@ Example:
 ```
 
 Original Cover Image:
+
 ![original_cover](./storage/data/image1.jpg)
 
 Encoded Cover Image:
+
 ![encoded_cover](./storage/data/image1_.webp)
 
 Note: If the cover image is in JPEG format, the result image will be saved in WEBP.
@@ -46,9 +48,11 @@ Example:
 ```
 
 Original Hidden Image:
+
 ![original_hidden](./storage/data/image2.jpg)
 
 Decoded Hidden Image:
+
 ![decoded_hidden](./storage/data/decoded.png)
 
 ## Building
