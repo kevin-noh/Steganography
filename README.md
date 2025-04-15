@@ -4,7 +4,7 @@ Python steganography tool: Hide an image inside another
 ## Steganography using Color Quantization (Indexed Color) and XOR-ing
 
 To hide any size of image, this project performs steganography in the following steps:
-1. Reduce the palette size of the input image
+1. Reduce the palette size of the input image using median cut color quantization
 2. Map each color from the reduced palette to black, almost black colors (#000000, #000100, etc.)
 3. Do (color-quantized and mapped image) XOR (cover image), pixel by pixel
 
