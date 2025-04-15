@@ -24,6 +24,14 @@ Example:
   $ python src/steg.py -i storage/data/image2.jpg -t storage/data/image1.jpg -s 1
 ```
 
+Original Cover Image:
+![original_cover](./storage/data/image1.jpg)
+
+Encoded Cover Image:
+![encoded_cover](./storage/data/image1_.webp)
+
+Note: If the cover image is in JPEG format, the result image will be saved in WEBP.
+
 ### Decoding
 ```
 Usage:
@@ -36,6 +44,12 @@ Options:
 Example:
   $ python src/unsteg.py -t storage/data/image1_.webp
 ```
+
+Original Hidden Image:
+![original_hidden](./storage/data/image2.jpg)
+
+Decoded Hidden Image:
+![decoded_hidden](./storage/data/decoded.png)
 
 ## Building
 This project is using Flet framework for GUI interface.
