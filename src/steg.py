@@ -27,10 +27,13 @@ from math import floor
 from numpy import uint8, bitwise_xor, max, min, mean, array
 from skimage.transform import resize
 import cv2
+from PIL import Image, ImageCms
+import io
 
 input_img = None
 target_img = None
 save = False
+pillow_image = None
 
 '''
     a color palette of quantized colors at first,
@@ -40,20 +43,23 @@ quantized_palette = dict()
 
 def resize_input_image():
     global input_img
-    
-    print("before resize: ", input_img.shape, ", ", target_img.shape)
+    global target_img
+    print("Initial dimensions: ", input_img.shape, ", ", target_img.shape)
+
     if (input_img.shape[0] > target_img.shape[0]) or \
-        (input_img.shape[1] > target_img.shape[1]):
-        if target_img.shape[0] > target_img.shape[1]:
-            percent = (target_img.shape[1] / float(input_img.shape[1]))
-            other = int((float(input_img.shape[0]) * float(percent)))
-            input_img = resize(input_img, (other, target_img.shape[1]), anti_aliasing=false, preserve_range=true)
-        else:
+        (input_img.shape[1] > target_img.shape[1]):   
+        
+        if abs(input_img.shape[0] - target_img.shape[0]) > abs(input_img.shape[1] - target_img.shape[1]):
             percent = (target_img.shape[0] / float(input_img.shape[0]))
             other = int((float(input_img.shape[1]) * float(percent)))
-            input_img = resize(input_img, (target_img.shape[0], other), anti_aliasing=false, preserve_range=true)
+            input_img = resize(input_img, (target_img.shape[0], other), anti_aliasing=False, preserve_range=True)
+        else:
+            percent = (target_img.shape[1] / float(input_img.shape[1]))
+            other = int((float(input_img.shape[0]) * float(percent)))
+            input_img = resize(input_img, (other, target_img.shape[1]), anti_aliasing=False, preserve_range=True)
         print("after resize: ", input_img.shape, ", ", target_img.shape)
-        input_img = input_img.astype(uint8, copy=false)
+        input_img = input_img.astype(uint8, copy=False)
+
 
 '''
     swap the keys/values of quantized_palette and
@@ -86,6 +92,7 @@ def xor_img(input_img, target_img):
     i_w = input_img.shape[1]
     h_interval = floor(t_h / i_h)
     w_interval = floor(t_w / i_w)
+    # print(t_h, t_w, i_h, i_w, h_interval, w_interval)
     
     for rindex in range(i_h):
         t_r = rindex * h_interval
@@ -97,6 +104,12 @@ def xor_img(input_img, target_img):
             bitwise_xor(target_img[t_r][t_c][1], input_img[rindex][cindex][1])
             target_img[t_r][t_c][2] = \
             bitwise_xor(target_img[t_r][t_c][2], input_img[rindex][cindex][2])
+            # target_img[t_r][t_c][0] = \
+            # 255
+            # target_img[t_r][t_c][1] = \
+            # 0
+            # target_img[t_r][t_c][2] = \
+            # 0
             
     return target_img
     
@@ -169,16 +182,13 @@ def stegano_image(target_path, output_path):
     global input_img
     global target_img
     global quantized_palette
+    global pillow_image
     
     # flat out the input image to perform median-cut color quantization on the input
     flattened_img_array = []
-    flattened_orig = []
     for rindex, rows in enumerate(input_img):
         for cindex, color in enumerate(rows):
             flattened_img_array.append([color[0], color[1], color[2], rindex, cindex])
-            flattened_orig.append(color[0])
-            flattened_orig.append(color[1])
-            flattened_orig.append(color[2])
     
     flattened_img_array = array(flattened_img_array)
     
@@ -224,10 +234,11 @@ def stegano_image(target_path, output_path):
     
     # input image xor target image
     steged = xor_img(input_img, target_img)
+    
     if output_path.endswith(".png"):
         cv2.imwrite(output_path, steged, [cv2.IMWRITE_PNG_COMPRESSION, 6])
     else:
-        cv2.imwrite(output_path, steged)
+        Image.fromarray(cv2.cvtColor(steged, cv2.COLOR_BGR2RGB)).save(output_path, format="WEBP", lossless=True, quality=100)
     
     '''
         write the input image dimension, # of colors, color mappings
@@ -250,11 +261,11 @@ def stegano_image(target_path, output_path):
         b += write_decode_palette()
         
         if save:
-            flattened_orig = []
-            with open(target_path, "rb") as orig:
-                of = orig.read()
-                orig_b = bytearray(of)
-                b += orig_b
+            # print("before save: ", cv2.cvtColor(array(pillow_image), cv2.COLOR_RGB2BGR)[0][0])
+            img_byte_array = io.BytesIO()
+            pillow_image.save(img_byte_array, format='webp', lossless=True, quality=100)
+            b += img_byte_array.getvalue()
+            # print("after save: ", cv2.cvtColor(array(Image.open(img_byte_array)), cv2.COLOR_RGB2BGR)[0][0])
         
         b += eof_offset.to_bytes(4, byteorder='big')
         
@@ -279,8 +290,20 @@ def init_params(input_path, target_path, save_flag):
     global input_img
     global target_img
     global save
+    global pillow_image
+    
     input_img = cv2.imread(input_path)
-    target_img = cv2.imread(target_path)
+    
+    pillow_image = Image.open(target_path)
+    icc = pillow_image.info.get("icc_profile")
+    if icc:
+        srgb_profile = ImageCms.createProfile("sRGB")
+        input_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+        ImageCms.profileToProfile(pillow_image, input_profile, srgb_profile, outputMode='RGB', inPlace=True)
+            
+    target_img = cv2.cvtColor(array(pillow_image), cv2.COLOR_RGB2BGR)
+    cv2.imwrite("./out/test.webp", target_img)
+    
     quantized_palette.clear()
     save = save_flag
 
@@ -301,7 +324,15 @@ if __name__ == '__main__':
     
     # Read the images
     input_img = cv2.imread(input_path)
-    target_img = cv2.imread(target_path)
+    
+    pillow_image = Image.open(target_path)
+    icc = pillow_image.info.get("icc_profile")
+    if icc:
+        srgb_profile = ImageCms.createProfile("sRGB")
+        input_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+        ImageCms.profileToProfile(pillow_image, input_profile, srgb_profile, outputMode='RGB', inPlace=True)
+            
+    target_img = cv2.cvtColor(array(pillow_image), cv2.COLOR_RGB2BGR)
     
     '''
         Check whether the image need to be resized

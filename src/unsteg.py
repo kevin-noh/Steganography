@@ -24,9 +24,11 @@
 import argparse
 import math
 
-from numpy import empty, bitwise_xor, asarray, uint8
+from numpy import empty, bitwise_xor, asarray, uint8, frombuffer, array
 from skimage.transform import resize
 import cv2
+import io
+from PIL import Image, ImageCms
 
 input_img = None
 target_img = None
@@ -92,7 +94,9 @@ def read_decode_info(target_path):
             
         if pointer + 4 < len(b):
             orig_bytearray = b[pointer:-4]
-            input_img = cv2.imdecode(asarray(orig_bytearray, dtype=uint8), cv2.IMREAD_COLOR)
+            input_img = Image.open(io.BytesIO(orig_bytearray))
+            input_img = cv2.cvtColor(array(input_img), cv2.COLOR_RGB2BGR)
+            # print("retrieved: ", input_img[0][0])
             
         return w, h, decode_palette
     
@@ -112,20 +116,25 @@ def unstegano_image(target_path):
     w_interval = math.floor(t_w / i_w)
     retrieved = empty((i_h, i_w, 3))
     
-    for rindex in range(i_h):
-        t_r = rindex * h_interval
-        for cindex in range(i_w):
-            t_c = cindex * w_interval
+    try:
+        for rindex in range(i_h):
+            t_r = rindex * h_interval
+            for cindex in range(i_w):
+                t_c = cindex * w_interval
+                
+                # XOR-ed RGB
+                rgb = (bitwise_xor(target_img[t_r][t_c][0], input_img[t_r][t_c][0]), \
+                bitwise_xor(target_img[t_r][t_c][1], input_img[t_r][t_c][1]), \
+                bitwise_xor(target_img[t_r][t_c][2], input_img[t_r][t_c][2]))
+                # Recover quantized image from the indexed image
+                rgb = decode_palette[rgb]
+                retrieved[rindex][cindex] = list(rgb)
+    except:
+        print("something went wrong while extracting the image!")
+        print(t_c, t_r, ": ", target_img[t_r][t_c])
+        print(input_img[t_r][t_c])
+        print(rgb)
             
-            # XOR-ed RGB
-            rgb = (bitwise_xor(target_img[t_r][t_c][0], input_img[t_r][t_c][0]), \
-            bitwise_xor(target_img[t_r][t_c][1], input_img[t_r][t_c][1]), \
-            bitwise_xor(target_img[t_r][t_c][2], input_img[t_r][t_c][2]))
-            # Recover quantized image from the indexed image
-            rgb = decode_palette[rgb]
-            retrieved[rindex][cindex] = list(rgb)
-            
-    # cv2.imwrite('./out/xor_out.png', retrieved)
     output_path = return_output_path(target_path) + 'decoded.png'
     cv2.imwrite(output_path, retrieved)
 
@@ -146,7 +155,14 @@ def init_params(input_path, target_path):
     global target_img
     
     if not input_path is None:
-        input_img = cv2.imread(input_path)
+        pillow_image = Image.open(input_path)
+        icc = pillow_image.info.get("icc_profile")
+        if icc:
+            srgb_profile = ImageCms.createProfile("sRGB")
+            input_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+            ImageCms.profileToProfile(pillow_image, input_profile, srgb_profile, outputMode='RGB', inPlace=True)
+                
+        input_img = cv2.cvtColor(array(pillow_image), cv2.COLOR_RGB2BGR)
     target_img = cv2.imread(target_path)
     
     decode_palette.clear()
@@ -170,7 +186,14 @@ if __name__ == '__main__':
     read_decode_info(target_path)
     
     if input_img is None:
-        input_img = cv2.imread(input_path)
+        pillow_image = Image.open(input_path)
+        icc = pillow_image.info.get("icc_profile")
+        if icc:
+            srgb_profile = ImageCms.createProfile("sRGB")
+            input_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+            ImageCms.profileToProfile(pillow_image, input_profile, srgb_profile, outputMode='RGB', inPlace=True)
+                
+        input_img = cv2.cvtColor(array(pillow_image), cv2.COLOR_RGB2BGR)
         
     '''
         Check whether the image need to be resized

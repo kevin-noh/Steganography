@@ -1,136 +1,131 @@
-import flet
-from flet import (
-    ElevatedButton,
-    FilePicker,
-    FilePickerResultEvent,
-    Page,
-    Row,
-    Column,
-    Text,
-    TextStyle,
-    Icons,
-    Switch,
-    IconButton,
-    Container
+import sys, os
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QLabel, QPushButton, QGridLayout, QVBoxLayout,
+    QCheckBox, QMessageBox, QSizePolicy
 )
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap
 import steg
 import unsteg
 
-input_image_path = Text()
-target_image_path = Text()
-paths = [input_image_path, target_image_path]
-save = Switch(label="Save Original Image within the Target Image", value=True)
 
-def call_steg(e):
-    if paths[0].value == None or paths[0].value == "" or \
-    paths[1].value == None or paths[1].value == "":
-        print("?")
-    else:
-        steg.init_params(paths[0].value, paths[1].value, save.value)
-        output_path = steg.return_output_path(paths[1].value)
-        steg.stegano_image(paths[1].value, output_path)
-    
-def call_unsteg(e):
-    if paths[1].value == None or paths[1].value == "":
-        print("?")
-    else:
-        if save.value:
-            unsteg.init_params(None, paths[1].value)
+class ImageLabel(QLabel):
+    def __init__(self, text):
+        super().__init__()
+
+        self.setAcceptDrops(True)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setText('\n\n ' + text + ' \n\n')
+        self.path = None
+        self.setStyleSheet('''
+            QLabel{
+                border: 4px dashed #aaa
+            }
+        ''')
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasImage:
+            event.accept()
         else:
-            unsteg.init_params(paths[0].value, paths[1].value)
-        unsteg.unstegano_image(paths[1].value)
+            event.ignore()
 
-def main(page: Page):
-    page.title = "Steganography Test"
-    page.window.width = 500
-    page.window.height = 300
-    
-    # Pick files dialog
-    def pick_input_result(e: FilePickerResultEvent):
-        paths[0].value = (
-            e.files[0].path if e.files else None
-        )
-        paths[0].update()
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasImage:
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasImage:
+            event.setDropAction(Qt.DropAction.CopyAction)
+            file_path = event.mimeData().urls()[0].toLocalFile()
+            self.path = file_path
+            self.setPixmap(QPixmap(file_path).scaled(
+                self.width(), self.height(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+            event.accept()
+        else:
+            event.ignore()
+
+    def setPixmap(self, image):
+        super().setPixmap(image)
+
+class AppDemo(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.resize(1280, 1024)
+        self.setWindowTitle("Steganography")
+
+        mainLayout = QGridLayout()
         
-    def pick_target_result(e: FilePickerResultEvent):
-        paths[1].value = (
-            e.files[0].path if e.files else None
-        )
-        paths[1].update()
+        mainLayout.setRowStretch(0, 3)
+        mainLayout.setRowStretch(1, 0)
+        mainLayout.setRowStretch(2, 1)
 
-    input_image_dialog = FilePicker(on_result=pick_input_result)
-    target_image_dialog = FilePicker(on_result=pick_target_result)
+        self.inputImg = ImageLabel("Drop the image you want to hide here")
+        self.targetImg = ImageLabel("Drop the cover image here")
+        self.saveFlag = QCheckBox("Save the original image into the result")
+        self.saveFlag.setChecked(True)
+        self.stegButton = QPushButton(text="Hide", parent=self)
+        self.unstegButton = QPushButton(text="Retrieve", parent=self)
 
-    # hide all dialogs in overlay
-    page.overlay.extend([input_image_dialog, target_image_dialog])
+        mainLayout.addWidget(self.inputImg, 0, 0)
+        mainLayout.addWidget(self.targetImg, 0, 1)
+        mainLayout.addWidget(self.saveFlag, 1, 0, 1, 2, alignment=Qt.AlignmentFlag.AlignCenter)
+        mainLayout.addWidget(self.stegButton, 2, 0)
+        mainLayout.addWidget(self.unstegButton, 2, 1)
+        self.stegButton.clicked.connect(self.hide)
+        self.unstegButton.clicked.connect(self.retrieve)
 
-    page.add(
-        Row(
-            [
-                ElevatedButton(
-                    "Input Image",
-                    icon=Icons.UPLOAD_FILE,
-                    on_click=lambda _: input_image_dialog.pick_files(
-                        allow_multiple=False
-                    ),
-                ),
-                paths[0],
-                IconButton(
-                    icon=Icons.DELETE_FOREVER_ROUNDED,
-                    icon_color="pink600",
-                    icon_size=30,
-                    tooltip="Clear the file",
-                    on_click=lambda _: ((globals()['paths'][0].__setattr__('value', None)),
-                    globals()['paths'][0].update()),
-                ),
-            ],
-            alignment=flet.MainAxisAlignment.CENTER
-        ),
-        Row(
-            [
-                ElevatedButton(
-                    "Target Image",
-                    icon=Icons.UPLOAD_FILE,
-                    on_click=lambda _: target_image_dialog.pick_files(
-                        allow_multiple=False
-                    ),
-                ),
-                paths[1],
-                IconButton(
-                    icon=Icons.DELETE_FOREVER_ROUNDED,
-                    icon_color="pink600",
-                    icon_size=30,
-                    tooltip="Clear the file",
-                    on_click=lambda _: ((globals()['paths'][1].__setattr__('value', None)),
-                    globals()['paths'][1].update()),
-                ),
-            ],
-            alignment=flet.MainAxisAlignment.CENTER
-        ),
-        Row([save], alignment=flet.MainAxisAlignment.CENTER),
-        Row(
-            [
-                Column(
-                    [
-                        ElevatedButton(
-                            "Encode",
-                            on_click=call_steg,
-                        ),
-                        
-                    ]
-                ),
-                Column(
-                    [
-                        ElevatedButton(
-                            "Decode",
-                            on_click=call_unsteg,
-                        ),
-                    ]
-                )
-            ],
-            alignment=flet.MainAxisAlignment.CENTER
-        ),
-    )
+        self.stegButton.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Maximum)
+        self.unstegButton.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Maximum)
 
+        self.setLayout(mainLayout)
 
-flet.app(target=main)
+    def hide(self):
+        if self.inputImg.path == None or self.targetImg.path == None:
+            dlg = QMessageBox.critical(
+                self,
+                "Alert",
+                "You did not upload the images!"
+            )
+        else:
+            if self.saveFlag.isChecked():
+                steg.init_params(self.inputImg.path, self.targetImg.path, 1)
+            else:
+                steg.init_params(self.inputImg.path, self.targetImg.path, 0)
+            output_path = steg.return_output_path(self.targetImg.path)
+            steg.resize_input_image()
+            steg.stegano_image(self.targetImg.path, output_path)
+        
+            dlg = QMessageBox.information(
+                self,
+                "Info",
+                "Done!"
+            )
+            
+
+    def retrieve(self):
+        if self.targetImg.path == None:
+            dlg = QMessageBox.critical(
+                self,
+                "Alert",
+                "You did not upload the cover image!"
+            )
+        else:
+            if self.saveFlag.isChecked():
+                unsteg.init_params(None, self.targetImg.path)
+            else:
+                unsteg.init_params(self.inputImg.path, self.targetImg.path)
+            unsteg.unstegano_image(self.targetImg.path)
+
+            dlg = QMessageBox.information(
+                self,
+                "Info",
+                "Done!"
+            )
+
+app = QApplication(sys.argv)
+demo = AppDemo()
+demo.show()
+sys.exit(app.exec())
