@@ -56,14 +56,14 @@ Decoded Hidden Image:
 ![decoded_hidden](./storage/data/decoded.png)
 
 ## Building
-This project is using Flet framework for GUI interface.
+This project is using PyQt6 framework for GUI interface.
 
-To build GUI standalone app, first install Flet using:
+To build GUI standalone app, first install PyQt6 using:
 ```
-pip install flet[all]
+pip install PyQt6
 ```
 
 Then, build the app:
 ```
-flet pack src/main.py
+pyinstaller -w -F main.py
 ```
