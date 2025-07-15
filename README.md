@@ -13,7 +13,7 @@ To hide any size of image, this project performs steganography in the following 
 ### Encoding
 ```
 Usage:
-  python steg.py -i <image_to_hide> -t <cover_image> -s <0|1>
+  python steg.py -i <img1> -t <img2> -s <0|1>
 
 Options:
   -i, --input              path to the image to hide
@@ -37,7 +37,7 @@ Note: If the cover image is in JPEG format, the result image will be saved in WE
 ### Decoding
 ```
 Usage:
-  python unsteg.py -i <image_to_hide> -t <cover_image> -s <0|1>
+  python unsteg.py -i <img1> -t <img2> -s <0|1>
 
 Options:
   -i, --input              optional, path to the original cover image
